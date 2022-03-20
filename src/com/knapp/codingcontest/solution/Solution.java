@@ -25,6 +25,7 @@ import com.knapp.codingcontest.warehouse.Robot;
 import com.knapp.codingcontest.warehouse.Storage;
 import com.knapp.codingcontest.warehouse.Warehouse;
 import com.knapp.codingcontest.warehouse.WarehouseInfo;
+import com.knapp.codingcontest.warehouse.ex.NoSuchLocationException;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -57,6 +58,8 @@ public class Solution
   protected final Location exitLocation;
   protected final Robot robot;
 
+  private final Location centerLocation;
+
   // ----------------------------------------------------------------------------
 
   public Solution(final Warehouse warehouse, final InputData input) {
@@ -69,6 +72,11 @@ public class Solution
     robot = storage.getRobot();
 
     // TODO: prepare data structures
+    try {
+      centerLocation = storage.getLocation(0, 13);
+    } catch (NoSuchLocationException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   // ----------------------------------------------------------------------------
@@ -106,8 +114,8 @@ public class Solution
         while (true) {
           if (entryLocation.getCurrentProducts().isEmpty())
             break;
-          Product entryProduct = entryLocation.getCurrentProducts().get(0);
-          if (robot.getRemainingLength() < entryProduct.getLength() || robot.getCurrentMaxWidth() > entryProduct.getWidth())
+          Product p = entryLocation.getCurrentProducts().get(0);
+          if (robot.getRemainingLength() < p.getLength() || robot.getCurrentMaxWidth() > p.getWidth())
             break;
           robot.pullFrom(entryLocation);
         }
@@ -188,11 +196,8 @@ public class Solution
 
   private Location nearestLocationOf(String productCode)
   {
-    List<Location> nearestLocations = storage.getAllLocations().stream()
+    return storage.getAllLocations().stream()
         .sorted(Comparator.comparingDouble(this::distanceRobot))
-        .collect(Collectors.toList());
-
-    return nearestLocations.stream()
         .filter(l -> !l.getCurrentProducts().isEmpty())
         .filter(l -> l.getCurrentProducts().get(0).getCode().equals(productCode))
         .filter(l -> l != exitLocation)
@@ -203,17 +208,17 @@ public class Solution
   private void pushToNearestStorage() throws Exception
   {
     final Product product = robot.getCurrentProducts().get(0);
-    List<Location> nearestLocations = storage.getAllLocations().stream()
-        .sorted(Comparator.comparingDouble(this::distanceCenter))
-        .collect(Collectors.toList());
-
-    Location location = nearestLocations.stream()
-        .filter(l -> (
-                (l.getCurrentProducts().isEmpty())
+    final Location location = storage.getAllLocations().stream()
+        .sorted(Comparator.comparingDouble(this::distanceCenter)).filter(l -> (
+                (
+                    l.getCurrentProducts().isEmpty()
+                )
                     ||
-                    (!l.getCurrentProducts().isEmpty() &&
-                        l.getCurrentProducts().get(0).getCode().equals(product.getCode()) &&
-                        l.getRemainingLength() >= product.getLength())
+                (
+                    !l.getCurrentProducts().isEmpty() &&
+                    l.getCurrentProducts().get(0).getCode().equals(product.getCode()) &&
+                    l.getRemainingLength() >= product.getLength()
+                )
             )
         )
         .filter(l -> l != entryLocation && l != exitLocation)
@@ -234,11 +239,7 @@ public class Solution
 
   private double distanceCenter(Location l)
   {
-    try {
-      return distance(storage.getLocation(0, 13), l);
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
+    return distance(centerLocation, l);
   }
 
   // ----------------------------------------------------------------------------
