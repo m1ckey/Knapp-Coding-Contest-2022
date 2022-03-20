@@ -26,18 +26,25 @@ import com.knapp.codingcontest.warehouse.Storage;
 import com.knapp.codingcontest.warehouse.Warehouse;
 import com.knapp.codingcontest.warehouse.WarehouseInfo;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.stream.Collectors;
+
 /**
  * This is the code YOU have to provide
  *
  * @param warehouse all the operations you should need
  */
-public class Solution {
-  public String getParticipantName() {
-    return ; // TODO: return your name
+public class Solution
+{
+  public String getParticipantName()
+  {
+    return "Michael Krickl";
   }
 
-  public Institute getParticipantInstitution() {
-    return Institute. ; // TODO: return the Id of your institute - please refer to the hand-out
+  public Institute getParticipantInstitution()
+  {
+    return Institute.Sonstige;
   }
 
   // ----------------------------------------------------------------------------
@@ -71,6 +78,44 @@ public class Solution {
    */
   public void run() throws Exception {
     // TODO: make calls to API (see below)
+
+    while (warehouse.hasNextOrder()) {
+      Order order = warehouse.nextOrder();
+      List<Product> todo = order.getProducts().stream()
+          .sorted(Comparator.comparingInt(Product::getWidth))
+          .collect(Collectors.toList());
+
+      System.out.println("Order: " + order.getCode());
+      while (todo.size() > 0) {
+        for (Product p : todo) {
+          Location l = nearestLocationOf(p.getCode());
+          if (l != null && robot.getRemainingLength() >= p.getLength()) {
+            robot.pullFrom(l);
+          }
+        }
+
+        List<Product> roboProducts = new ArrayList<>(robot.getCurrentProducts());
+        for (Product p : roboProducts) {
+          robot.pushTo(exitLocation);
+          todo.remove(p);
+        }
+        if (roboProducts.size() > 0) {
+          continue;
+        }
+
+        while (true) {
+          if (entryLocation.getCurrentProducts().isEmpty())
+            break;
+          Product entryProduct = entryLocation.getCurrentProducts().get(0);
+          if (robot.getRemainingLength() < entryProduct.getLength() || robot.getCurrentMaxWidth() > entryProduct.getWidth())
+            break;
+          robot.pullFrom(entryLocation);
+        }
+        while (!robot.getCurrentProducts().isEmpty()) {
+          pushToNearestStorage();
+        }
+      }
+    }
   }
 
   // ----------------------------------------------------------------------------
@@ -139,6 +184,61 @@ public class Solution {
 
     // ----- additional information -----
     final WarehouseInfo info = warehouse.getInfoSnapshot();
+  }
+
+  private Location nearestLocationOf(String productCode)
+  {
+    List<Location> nearestLocations = storage.getAllLocations().stream()
+        .sorted(Comparator.comparingDouble(this::distanceRobot))
+        .collect(Collectors.toList());
+
+    return nearestLocations.stream()
+        .filter(l -> !l.getCurrentProducts().isEmpty())
+        .filter(l -> l.getCurrentProducts().get(0).getCode().equals(productCode))
+        .filter(l -> l != exitLocation)
+        .findFirst()
+        .orElse(null);
+  }
+
+  private void pushToNearestStorage() throws Exception
+  {
+    final Product product = robot.getCurrentProducts().get(0);
+    List<Location> nearestLocations = storage.getAllLocations().stream()
+        .sorted(Comparator.comparingDouble(this::distanceCenter))
+        .collect(Collectors.toList());
+
+    Location location = nearestLocations.stream()
+        .filter(l -> (
+                (l.getCurrentProducts().isEmpty())
+                    ||
+                    (!l.getCurrentProducts().isEmpty() &&
+                        l.getCurrentProducts().get(0).getCode().equals(product.getCode()) &&
+                        l.getRemainingLength() >= product.getLength())
+            )
+        )
+        .filter(l -> l != entryLocation && l != exitLocation)
+        .findFirst()
+        .orElseThrow(RuntimeException::new);
+    robot.pushTo(location);
+  }
+
+  private double distance(Location l1, Location l2)
+  {
+    return Math.sqrt(Math.pow(l1.getLevel() - l2.getLevel(), 2) + Math.pow(l1.getPosition() - l2.getPosition(), 2));
+  }
+
+  private double distanceRobot(Location l)
+  {
+    return distance(robot.getCurrentLocation(), l);
+  }
+
+  private double distanceCenter(Location l)
+  {
+    try {
+      return distance(storage.getLocation(0, 13), l);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   // ----------------------------------------------------------------------------
